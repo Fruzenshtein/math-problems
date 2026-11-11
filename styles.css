@@ -1,18 +1,68 @@
-html, body {
+html,
+body {
   height: 100%;
+}
+
+body {
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+.game {
+  width: 100%;
+  padding:
+    calc(env(safe-area-inset-top) + 24px)
+    calc(env(safe-area-inset-right) + 16px)
+    calc(env(safe-area-inset-bottom) + 24px)
+    calc(env(safe-area-inset-left) + 16px);
+}
+
+.game-title {
+  margin-bottom: 1.5rem;
+  font-size: clamp(1.75rem, 7vw, 2.5rem);
+  text-wrap: balance;
+}
+
+#fruit-problem {
+  width: 100%;
+  max-width: 360px;
 }
 
 #fruit-problem ul {
   list-style-type: none;
   padding: 0;
   margin: 0;
-  font-size: xx-large;
+  font-size: clamp(1.5rem, 7.5vw, 2rem);
+  line-height: 1.7;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 .input-group {
-  max-width: 260px;
+  width: 100%;
+  max-width: 320px;
 }
 
-#fruit-control button {
-  max-width: 260px;
+.input-group .input-group-text {
+  min-width: 4.5rem;
+  justify-content: center;
+}
+
+.input-group .form-control {
+  min-height: 3.25rem;
+}
+
+.game-btn,
+#fruit-control .btn {
+  width: 100%;
+  max-width: 320px;
+  min-height: 3.25rem;
+}
+
+@media (min-width: 576px) {
+  .game-btn,
+  #fruit-control .btn {
+    width: auto;
+    min-width: 260px;
+  }
 }

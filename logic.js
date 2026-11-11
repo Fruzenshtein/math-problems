@@ -114,6 +114,19 @@ insertEquationControlsIntoDOM = (quizElements) => {
     input.className = 'form-control';
     input.setAttribute('aria-label', emoji);
     input.setAttribute('aria-describedby', 'addon-wrapping');
+    input.inputMode = 'numeric';
+    input.setAttribute('pattern', '[0-9]*');
+    input.setAttribute('enterkeyhint', index === quizElements.size - 1 ? 'done' : 'next');
+    input.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter') return;
+      event.preventDefault();
+      const nextInput = document.getElementById(`fruit-${index + 1}`);
+      if (nextInput) {
+        nextInput.focus();
+      } else {
+        checkResults();
+      }
+    });
 
     div.appendChild(span);
     div.appendChild(input);
@@ -194,5 +207,7 @@ const checkResults = () => {
   showGenerateAgainButton();
   const checkResultsButton = document.getElementById('check-problem-results');
   checkResultsButton.classList.add('d-none');
+  if (document.activeElement) document.activeElement.blur();
+  document.getElementById('next-problem-button').scrollIntoView({ block: 'nearest' });
 }
 
