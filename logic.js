@@ -7,11 +7,11 @@ class QuizItem {
 
 const EMOJIS = ['🍎', '🍌', '🍇', '🥝', '🍉', '🍊', '🍋', '🍏', '🍐', '🥕'];
 const LEVELS = [
-  { id: 1, name: 'Легкий', description: '3 фрукти, числа до 5, лише додавання', layout: 'chain', fruits: 3, minValue: 1, maxValue: 5, minResult: 1, maxResult: 10, operations: ['+'] },
+  { id: 1, name: 'Легкий', description: '3 фрукти, числа до 10, лише додавання', layout: 'chain', fruits: 3, minValue: 1, maxValue: 10, minResult: 1, maxResult: 20, operations: ['+'] },
   { id: 2, name: 'Середній', description: '3 фрукти, числа до 10, плюс і мінус', layout: 'chain', fruits: 3, minValue: 1, maxValue: 10, minResult: 1, maxResult: 20, operations: ['+', '−'] },
-  { id: 3, name: 'Складний', description: '3 фрукти, числа до 20, результати до 50', layout: 'chain', fruits: 3, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
-  { id: 4, name: 'Експерт', description: '4 фрукти в кожному з 4 рівнянь, числа до 20', layout: 'full', fruits: 4, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
-  { id: 5, name: 'Майстер', description: '5 фруктів у кожному з 5 рівнянь, множення', layout: 'full', fruits: 5, minValue: 1, maxValue: 10, minResult: 1, maxResult: 100, operations: ['+', '−', '×'] }
+  { id: 3, name: 'Складний', description: '3 фрукти, числа до 20, плюс, мінус і множення', layout: 'chain', fruits: 3, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−', '×'] },
+  { id: 4, name: 'Експерт', description: '4 рівняння по 4 доданки, числа до 20', layout: 'stairs', fruits: 4, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
+  { id: 5, name: 'Майстер', description: '5 рівнянь по 5 доданків, множення', layout: 'stairs', fruits: 5, minValue: 1, maxValue: 10, minResult: 1, maxResult: 100, operations: ['+', '−', '×'] }
 ];
 const MAX_ATTEMPTS = 5000;
 const STORAGE_KEY = 'fruit-math:level';
@@ -78,35 +78,35 @@ const planChainEquation = (level, position) => {
   return { indexes: [position, first, second], operations: [pick(level.operations), pick(level.operations)] };
 };
 
-const planFullEquation = (level, usedPatterns) => {
-  const indexes = Array.from({ length: level.fruits }, (_, i) => i);
-  const additive = level.operations.filter((operation) => operation !== '×');
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const operations = Array.from({ length: level.fruits - 1 }, () => pick(additive));
-    if (level.operations.includes('×')) {
-      operations[randomInt(0, operations.length - 1)] = '×';
-    }
-    const pattern = operations.join('');
-    if (!usedPatterns.has(pattern)) {
-      usedPatterns.add(pattern);
-      return { indexes, operations };
-    }
+const planStairEquation = (level, position) => {
+  const distinct = position + 1;
+  const counts = new Array(distinct).fill(1);
+  for (let extra = 0; extra < level.fruits - distinct; extra++) {
+    counts[randomInt(0, distinct - 1)] += 1;
   }
-  return null;
+  const additive = level.operations.filter((operation) => operation !== '×');
+  const indexes = [];
+  const operations = [];
+  counts.forEach((count, fruit) => {
+    const sign = fruit === 0 ? '+' : pick(additive);
+    for (let copy = 0; copy < count; copy++) {
+      if (indexes.length > 0) operations.push(sign);
+      indexes.push(fruit);
+    }
+  });
+  if (position > 0 && level.operations.includes('×')) {
+    operations[randomInt(0, operations.length - 1)] = '×';
+  }
+  return { indexes, operations };
 };
 
-const buildTask = (level, items) => {
-  const usedPatterns = new Set();
-  const built = [];
-  for (let position = 0; position < level.fruits; position++) {
-    const plan = level.layout === 'full'
-      ? planFullEquation(level, usedPatterns)
+const buildTask = (level, items) =>
+  Array.from({ length: level.fruits }, (_, position) => {
+    const plan = level.layout === 'stairs'
+      ? planStairEquation(level, position)
       : planChainEquation(level, position);
-    if (!plan) return null;
-    built.push(buildEquation(items, plan.indexes, plan.operations));
-  }
-  return built;
-};
+    return buildEquation(items, plan.indexes, plan.operations);
+  });
 
 const isAllowedResult = (level, result) => result >= level.minResult && result <= level.maxResult;
 
@@ -136,9 +136,9 @@ const generateTask = (level) => {
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const items = createQuizItems(level, emojis);
     const built = buildTask(level, items);
-    if (!built || !built.every((equation) => isAllowedResult(level, equation.result))) continue;
+    if (!built.every((equation) => isAllowedResult(level, equation.result))) continue;
     const candidate = { items, equations: built };
-    if (level.layout !== 'full' || countSolutions(level, built, 2) === 1) return candidate;
+    if (countSolutions(level, built, 2) === 1) return candidate;
     fallback = fallback || candidate;
   }
   return fallback || generateTask(level);
