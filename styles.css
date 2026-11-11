@@ -55,6 +55,10 @@ body {
   padding: 0;
   margin: 0;
   font-size: clamp(1.5rem, 7.5vw, 2rem);
+}
+
+#fruit-problem ul.dense {
+  font-size: clamp(1.2rem, 6vw, 1.75rem);
   line-height: 1.7;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;

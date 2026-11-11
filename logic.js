@@ -5,20 +5,13 @@ class QuizItem {
   }
 }
 
-class Equation {
-  constructor(text, result) {
-    this.text = text;
-    this.result = result;
-  }
-}
-
 const EMOJIS = ['🍎', '🍌', '🍇', '🥝', '🍉', '🍊', '🍋', '🍏', '🍐', '🥕'];
 const LEVELS = [
-  { id: 1, name: 'Легкий', description: '3 фрукти, числа до 5, лише додавання', fruits: 3, minValue: 1, maxValue: 5, minResult: 1, maxResult: 10, operations: ['+'] },
-  { id: 2, name: 'Середній', description: '3 фрукти, числа до 10, плюс і мінус', fruits: 3, minValue: 1, maxValue: 10, minResult: 1, maxResult: 20, operations: ['+', '−'] },
-  { id: 3, name: 'Складний', description: '3 фрукти, числа до 20, результати до 50', fruits: 3, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
-  { id: 4, name: 'Експерт', description: '4 фрукти, 4 рівняння, числа до 20', fruits: 4, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
-  { id: 5, name: 'Майстер', description: '5 фруктів, 5 рівнянь, множення', fruits: 5, minValue: 1, maxValue: 10, minResult: 1, maxResult: 100, operations: ['+', '−', '×'] }
+  { id: 1, name: 'Легкий', description: '3 фрукти, числа до 5, лише додавання', layout: 'chain', fruits: 3, minValue: 1, maxValue: 5, minResult: 1, maxResult: 10, operations: ['+'] },
+  { id: 2, name: 'Середній', description: '3 фрукти, числа до 10, плюс і мінус', layout: 'chain', fruits: 3, minValue: 1, maxValue: 10, minResult: 1, maxResult: 20, operations: ['+', '−'] },
+  { id: 3, name: 'Складний', description: '3 фрукти, числа до 20, результати до 50', layout: 'chain', fruits: 3, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
+  { id: 4, name: 'Експерт', description: '4 фрукти в кожному з 4 рівнянь, числа до 20', layout: 'full', fruits: 4, minValue: 1, maxValue: 20, minResult: 1, maxResult: 50, operations: ['+', '−'] },
+  { id: 5, name: 'Майстер', description: '5 фруктів у кожному з 5 рівнянь, множення', layout: 'full', fruits: 5, minValue: 1, maxValue: 10, minResult: 1, maxResult: 100, operations: ['+', '−', '×'] }
 ];
 const MAX_ATTEMPTS = 5000;
 const STORAGE_KEY = 'fruit-math:level';
@@ -45,68 +38,110 @@ const selectEmojis = (count) => shuffle(EMOJIS).slice(0, count);
 const createQuizItems = (level, emojis) =>
   emojis.map((emoji) => new QuizItem(emoji, randomInt(level.minValue, level.maxValue)));
 
-const evaluateExpression = (values, operations) => {
+const evaluateIndexed = (values, indexes, operations) => {
   let total = 0;
-  let term = values[0];
+  let term = values[indexes[0]];
   let sign = 1;
-  operations.forEach((operation, i) => {
-    const value = values[i + 1];
-    if (operation === '×') {
+  for (let i = 0; i < operations.length; i++) {
+    const value = values[indexes[i + 1]];
+    if (operations[i] === '×') {
       term *= value;
     } else {
       total += sign * term;
-      sign = operation === '+' ? 1 : -1;
+      sign = operations[i] === '+' ? 1 : -1;
       term = value;
     }
-  });
+  }
   return total + sign * term;
 };
 
 const buildEquation = (items, indexes, operations) => {
-  const values = indexes.map((i) => items[i].number);
-  const result = evaluateExpression(values, operations);
+  const values = items.map((item) => item.number);
+  const result = evaluateIndexed(values, indexes, operations);
   const parts = [items[indexes[0]].emoji];
   operations.forEach((operation, k) => {
     parts.push(operation, items[indexes[k + 1]].emoji);
   });
-  return new Equation(`${parts.join(' ')} = ${result}`, result);
+  return { text: `${parts.join(' ')} = ${result}`, result, indexes, operations };
 };
 
-const planEquation = (level, position, forcedOperation) => {
-  const operation = () => forcedOperation || pick(level.operations);
+const planChainEquation = (level, position) => {
   if (position === 0) {
-    return level.operations.includes('×') && !forcedOperation
-      ? { indexes: [0, 0], operations: ['×'] }
-      : { indexes: [0, 0, 0], operations: ['+', '+'] };
+    return { indexes: [0, 0, 0], operations: ['+', '+'] };
   }
   if (position === 1) {
-    return { indexes: [1, 1, 0], operations: ['+', operation()] };
+    return { indexes: [1, 1, 0], operations: ['+', pick(level.operations)] };
   }
   const known = Array.from({ length: position }, (_, i) => i);
   const first = pick(known);
   const second = pick(known.filter((i) => i !== first));
-  return { indexes: [position, first, second], operations: [operation(), operation()] };
+  return { indexes: [position, first, second], operations: [pick(level.operations), pick(level.operations)] };
 };
 
-const buildTask = (level, items, forcedOperation) =>
-  Array.from({ length: level.fruits }, (_, position) => {
-    const plan = planEquation(level, position, forcedOperation);
-    return buildEquation(items, plan.indexes, plan.operations);
-  });
+const planFullEquation = (level, usedPatterns) => {
+  const indexes = Array.from({ length: level.fruits }, (_, i) => i);
+  const additive = level.operations.filter((operation) => operation !== '×');
+  for (let attempt = 0; attempt < 100; attempt++) {
+    const operations = Array.from({ length: level.fruits - 1 }, () => pick(additive));
+    if (level.operations.includes('×')) {
+      operations[randomInt(0, operations.length - 1)] = '×';
+    }
+    const pattern = operations.join('');
+    if (!usedPatterns.has(pattern)) {
+      usedPatterns.add(pattern);
+      return { indexes, operations };
+    }
+  }
+  return null;
+};
+
+const buildTask = (level, items) => {
+  const usedPatterns = new Set();
+  const built = [];
+  for (let position = 0; position < level.fruits; position++) {
+    const plan = level.layout === 'full'
+      ? planFullEquation(level, usedPatterns)
+      : planChainEquation(level, position);
+    if (!plan) return null;
+    built.push(buildEquation(items, plan.indexes, plan.operations));
+  }
+  return built;
+};
 
 const isAllowedResult = (level, result) => result >= level.minResult && result <= level.maxResult;
 
+const countSolutions = (level, built, limit) => {
+  const values = new Array(level.fruits).fill(level.minValue);
+  let count = 0;
+  for (;;) {
+    let matches = true;
+    for (let k = 0; k < built.length && matches; k++) {
+      matches = evaluateIndexed(values, built[k].indexes, built[k].operations) === built[k].result;
+    }
+    if (matches && ++count >= limit) return count;
+    let position = 0;
+    while (position < values.length) {
+      values[position] += 1;
+      if (values[position] <= level.maxValue) break;
+      values[position] = level.minValue;
+      position += 1;
+    }
+    if (position === values.length) return count;
+  }
+};
+
 const generateTask = (level) => {
   const emojis = selectEmojis(level.fruits);
+  let fallback = null;
   for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
     const items = createQuizItems(level, emojis);
     const built = buildTask(level, items);
-    if (built.every((equation) => isAllowedResult(level, equation.result))) {
-      return { items, equations: built };
-    }
+    if (!built || !built.every((equation) => isAllowedResult(level, equation.result))) continue;
+    const candidate = { items, equations: built };
+    if (level.layout !== 'full' || countSolutions(level, built, 2) === 1) return candidate;
+    fallback = fallback || candidate;
   }
-  const items = emojis.map((emoji) => new QuizItem(emoji, level.minValue));
-  return { items, equations: buildTask(level, items, '+') };
+  return fallback || generateTask(level);
 };
 
 const readStoredLevel = () => {
@@ -146,6 +181,7 @@ const renderLevelButtons = () => {
 
 const insertEquationsIntoDOM = () => {
   const container = document.getElementById('fruit-equations');
+  container.classList.toggle('dense', currentLevel.fruits >= 5);
   const fragment = document.createDocumentFragment();
   equations.forEach((equation) => {
     const li = document.createElement('li');
